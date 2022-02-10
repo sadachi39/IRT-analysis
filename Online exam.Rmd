@@ -1,0 +1,970 @@
+---
+title: "ES350"
+author: "Shinsuke Adachi"
+date: "7/18/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(ltm)
+library(irtoys)
+library(tidyverse)
+library(gt)
+library(kableExtra)
+library(ggplot2)
+library(readxl)
+library(ggpubr)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+options(knitr.kable.NA = '')
+```
+
+```{r echo=FALSE}
+scores <- read.csv("online_IBA_equiv_scores.csv",header = TRUE)
+master <- read.csv("online_IBA_equiv_master.csv",header = TRUE)
+
+scores_ES150 <- subset(scores, scores$level == 'ES150')
+scores_ES250 <- subset(scores, scores$level == 'ES250')
+scores_ES350 <- subset(scores, scores$level == 'ES350')
+
+master_ES150 <- subset(master, master$level == 'ES150')
+master_ES250 <- subset(master, master$level == 'ES250')
+master_ES350 <- subset(master, master$level == 'ES350')
+```
+
+## Cleaning
+```{r echo=FALSE}
+for (i in 1:length(scores_ES150$score)){ 
+  if (scores_ES150$score[i] < 1){
+    scores_ES150$score[i] <- 0
+ }
+}
+for (i in 1:length(scores_ES250$score)){ 
+  if (scores_ES250$score[i] < 1){
+    scores_ES250$score[i] <- 0
+ }
+}
+for (i in 1:length(scores_ES350$score)){ 
+  if (scores_ES350$score[i] < 1){
+    scores_ES350$score[i] <- 0
+ }
+}
+```
+
+
+# Add difficulty data
+```{r echo=FALSE}
+for (i in 1:nrow(scores_ES150)){
+  id <- scores_ES150$question_id[i]
+  for (j in 1:nrow(master_ES150)){
+    if (id == master_ES150$question_id[j]){
+      scores_ES150$dif_level[i] <- master_ES150$dif_level[j]
+      scores_ES150$category[i] <- master_ES150$category[j]
+    }
+  }
+}
+
+for (i in 1:nrow(scores_ES250)){
+  id <- scores_ES250$question_id[i]
+  for (j in 1:nrow(master_ES250)){
+    if (id == master_ES250$question_id[j]){
+      scores_ES250$dif_level[i] <- master_ES250$dif_level[j]
+      scores_ES250$category[i] <- master_ES250$category[j]
+    }
+  }
+}
+
+for (i in 1:nrow(scores_ES350)){
+  id <- scores_ES350$question_id[i]
+  for (j in 1:nrow(master_ES350)){
+    if (id == master_ES350$question_id[j]){
+      scores_ES350$dif_level[i] <- master_ES350$dif_level[j]
+      scores_ES350$category[i] <- master_ES350$category[j]
+    }
+  }
+}
+```
+
+
+
+######################################################################
+ES150
+```{r echo=FALSE}
+Grammar150 <- subset(scores_ES150, scores_ES150$category == 'Grammar')
+
+student_id <- Grammar150$student_id[!duplicated(Grammar150$student_id)]
+answers150_grammar <- data.frame(matrix(ncol = 20, nrow = 0))
+colnames(answers150_grammar) <- c(16:25, 30:39)
+for (id in student_id){
+  indiv <- subset(Grammar150, Grammar150$student_id == id)
+  indiv <- indiv["score"]
+  indiv_t <- t(indiv)
+  colnames(indiv_t) <- as.character(c(16:25, 30:39))
+  rownames(indiv_t) <- id
+  answers150_grammar <- rbind(answers150_grammar, indiv_t)
+}
+```
+
+```{r echo=FALSE}
+dif_level_150_grammar <- data.frame(t(Grammar150$dif_level[1:20]))
+colnames(dif_level_150_grammar) <- c(16:25, 30:39)
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+total_score <- vector('numeric', nrow(answers150_grammar))
+for (i in 1:nrow(answers150_grammar)){
+  total_score[i] <- sum(answers150_grammar[i,])
+}
+total_score <- data.frame(total_score)
+
+ggplot(total_score, aes(x = total_score)) + geom_boxplot() + ggtitle("ES150 Online IBA Grammar") + xlab('Total Score (out of 20)')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(total_score, aes(x = total_score)) + geom_histogram(binwidth = 1, colour="black", fill="white") + geom_density()+ ggtitle("ES150 Online IBA Grammar") + xlab('Total Score')
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- colnames(answers150_grammar)
+
+avgData <- vector('numeric', 20L)
+for (j in 1:20) avgData[j] <- sum(na.omit(answers150_grammar[,j]))/length(na.omit(answers150_grammar[,j]))
+
+questionNumber <- factor(questionNumber, levels = sort(as.numeric(questionNumber)))
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=10), legend.position = "none", plot.title = element_text(size=10)) + ggtitle("ES150 Online IBA") + geom_text( aes(label = t(dif_level_150_grammar)), position = position_dodge(width = 0.9), vjust = -0.25, size = 3)
+
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+```{r echo=FALSE}
+u_150_grammar <- answers150_grammar
+ip_150_grammar <- est(resp=u_150_grammar, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_150_grammar$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_150_grammar$est
+```
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_150_grammar$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_150_grammar$est[,1], ip_150_grammar$est[,2], paste(rownames(ip_150_grammar$est)), cex = 0.5, col=t(dif_level_150_grammar)[,1])
+legend("topright", legend = c("dif_level 1", "dif_level 2", "dif_level 3"), text.col = unique(t(dif_level_150_grammar)[,1]), cex = 0.6)
+
+
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_150_grammar$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_150_grammar$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_150_grammar$est[,1] > low_disc & ip_150_grammar$est[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_150_grammar$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_150_grammar$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_150_grammar$est[,2] > low_diff & ip_150_grammar$est[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_150_grammar_2 <- select(u_150_grammar, -c("34", "35", "37", "39"))
+```
+
+```{r echo=FALSE}
+ip_150_grammar_2 <- est(resp=u_150_grammar_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_150_grammar_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_150_grammar_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_150_grammar_2$est[,1], ip_150_grammar_2$est[,2], paste(rownames(ip_150_grammar_2$est)), cex = 0.5, col=t(dif_level_150_grammar)[,1])
+legend("topright", legend = c("dif_level 1", "dif_level 2", "dif_level 3"), text.col = unique(t(dif_level_150_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_150_grammar$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v=0, h=0.5, lwd=0.5)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = -2 - data for students of ability = 2
+
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.5, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_150_grammar <- rowSums(u_150_grammar, na.rm = TRUE)
+comp <- apply(u_150_grammar, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_150_grammar[comp,], var, na.rm=TRUE))
+(sy <- var(y_150_grammar[comp]))
+```
+
+```{r echo=FALSE}
+r_150_grammar <- cor(u_150_grammar, use = "pairwise.complete.obs")
+head(r_150_grammar)
+
+reigen <- eigen(r_150_grammar)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+
+
+######################################################################
+ES250
+```{r echo=FALSE}
+Grammar250 <- subset(scores_ES250, scores_ES250$category == 'Grammar')
+
+student_id <- Grammar250$student_id[!duplicated(Grammar250$student_id)]
+answers250_grammar <- data.frame(matrix(ncol = 19, nrow = 0))
+colnames(answers250_grammar) <- c(16:24, 30:39)
+for (id in student_id){
+  indiv <- subset(Grammar250, Grammar250$student_id == id)
+  indiv <- indiv["score"]
+  indiv_t <- t(indiv)
+  colnames(indiv_t) <- as.character(c(16:24, 30:39))
+  rownames(indiv_t) <- id
+  answers250_grammar <- rbind(answers250_grammar, indiv_t)
+}
+```
+
+```{r echo=FALSE}
+dif_level_250_grammar <- data.frame(t(Grammar250$dif_level[1:19]))
+colnames(dif_level_250_grammar) <- c(16:24, 30:39)
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+total_score <- vector('numeric', nrow(answers250_grammar))
+for (i in 1:nrow(answers250_grammar)){
+  total_score[i] <- sum(answers250_grammar[i,])
+}
+total_score <- data.frame(total_score)
+
+ggplot(total_score, aes(x = total_score)) + geom_boxplot() + ggtitle("ES250 Online IBA Grammar") + xlab('Total Score (out of 19)')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(total_score, aes(x = total_score)) + geom_histogram(binwidth = 1, colour="black", fill="white") + geom_density()+ ggtitle("ES250 Online IBA Grammar") + xlab('Total Score')
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- colnames(answers250_grammar)
+
+avgData <- vector('numeric', 19L)
+for (j in 1:19) avgData[j] <- sum(na.omit(answers250_grammar[,j]))/length(na.omit(answers250_grammar[,j]))
+
+questionNumber <- factor(questionNumber, levels = sort(as.numeric(questionNumber)))
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=10), legend.position = "none", plot.title = element_text(size=10)) + ggtitle("ES250 Online IBA") + geom_text( aes(label = t(dif_level_250_grammar)), position = position_dodge(width = 0.9), vjust = -0.25, size = 3)
+
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+```{r echo=FALSE}
+u_250_grammar <- answers250_grammar
+ip_250_grammar <- est(resp=u_250_grammar, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_250_grammar$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_250_grammar$est
+```
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_250_grammar$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_250_grammar$est[,1], ip_250_grammar$est[,2], paste(rownames(ip_250_grammar$est)), cex = 0.5, col=t(dif_level_250_grammar)[,1])
+legend("topright", legend = c("dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_250_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_250_grammar$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_250_grammar$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_250_grammar$est[,1] > low_disc & ip_250_grammar$est[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_250_grammar$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_250_grammar$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_250_grammar$est[,2] > low_diff & ip_250_grammar$est[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_250_grammar_2 <- select(u_250_grammar, -c("37"))
+```
+
+```{r echo=FALSE}
+ip_250_grammar_2 <- est(resp=u_250_grammar_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_250_grammar_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_250_grammar_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_250_grammar_2$est[,1], ip_250_grammar_2$est[,2], paste(rownames(ip_250_grammar_2$est)), cex = 0.5, col=t(dif_level_250_grammar)[,1])
+legend("topright", legend = c("dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_250_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_250_grammar$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v=0, h=0.5, lwd=0.5)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = -2 - data for students of ability = 2
+
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.5, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_250_grammar <- rowSums(u_250_grammar, na.rm = TRUE)
+comp <- apply(u_250_grammar, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_250_grammar[comp,], var, na.rm=TRUE))
+(sy <- var(y_250_grammar[comp]))
+```
+
+```{r echo=FALSE}
+r_250_grammar <- cor(u_250_grammar, use = "pairwise.complete.obs")
+head(r_250_grammar)
+
+reigen <- eigen(r_250_grammar)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+######################################################################
+ES350
+```{r echo=FALSE}
+Grammar350 <- subset(scores_ES350, scores_ES350$category == 'Grammar')
+
+student_id <- Grammar350$student_id[!duplicated(Grammar350$student_id)]
+answers350_grammar <- data.frame(matrix(ncol = 20, nrow = 0))
+colnames(answers350_grammar) <- c(11:20, 25:34)
+for (id in student_id){
+  indiv <- subset(Grammar350, Grammar350$student_id == id)
+  indiv <- indiv["score"]
+  indiv_t <- t(indiv)
+  colnames(indiv_t) <- as.character(c(11:20, 25:34))
+  rownames(indiv_t) <- id
+  answers350_grammar <- rbind(answers350_grammar, indiv_t)
+}
+```
+
+```{r echo=FALSE}
+dif_level_350_grammar <- data.frame(t(Grammar350$dif_level[1:20]))
+colnames(dif_level_350_grammar) <- c(11:20, 25:34)
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+total_score <- vector('numeric', nrow(answers350_grammar))
+for (i in 1:nrow(answers350_grammar)){
+  total_score[i] <- sum(answers350_grammar[i,])
+}
+total_score <- data.frame(total_score)
+
+ggplot(total_score, aes(x = total_score)) + geom_boxplot() + ggtitle("ES350 Online IBA Grammar") + xlab('Total Score (out of 20)')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(total_score, aes(x = total_score)) + geom_histogram(binwidth = 1, colour="black", fill="white") + geom_density()+ ggtitle("ES350 Online IBA Grammar") + xlab('Total Score')
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- colnames(answers350_grammar)
+
+avgData <- vector('numeric', 20L)
+for (j in 1:20) avgData[j] <- sum(na.omit(answers350_grammar[,j]))/length(na.omit(answers350_grammar[,j]))
+
+questionNumber <- factor(questionNumber, levels = sort(as.numeric(questionNumber)))
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=10), legend.position = "none", plot.title = element_text(size=10)) + ggtitle("ES350 Online IBA") + geom_text( aes(label = t(dif_level_350_grammar)), position = position_dodge(width = 0.9), vjust = -0.25, size = 3)
+
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+```{r echo=FALSE}
+u_350_grammar <- answers350_grammar
+ip_350_grammar <- est(resp=u_350_grammar, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_350_grammar$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_350_grammar$est
+```
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_350_grammar$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_350_grammar$est[,1], ip_350_grammar$est[,2], paste(rownames(ip_350_grammar$est)), cex = 0.5, col=t(dif_level_350_grammar)[,1])
+legend("topright", legend = c("dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_350_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_350_grammar$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_350_grammar$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_350_grammar$est[,1] > low_disc & ip_350_grammar$est[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_350_grammar$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_350_grammar$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_350_grammar$est[,2] > low_diff & ip_350_grammar$est[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_350_grammar_2 <- select(u_350_grammar, -c("15", "30"))
+```
+
+```{r echo=FALSE}
+ip_350_grammar_2 <- est(resp=u_350_grammar_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_350_grammar_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_350_grammar_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_350_grammar_2$est[,1], ip_350_grammar_2$est[,2], paste(rownames(ip_350_grammar_2$est)), cex = 0.5, col=t(dif_level_350_grammar)[,1])
+legend("topright", legend = c("dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_350_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_350_grammar$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v=0, h=0.5, lwd=0.5)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = -2 - data for students of ability = 2
+
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.6]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.6, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_350_grammar <- rowSums(u_350_grammar, na.rm = TRUE)
+comp <- apply(u_350_grammar, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_350_grammar[comp,], var, na.rm=TRUE))
+(sy <- var(y_350_grammar[comp]))
+```
+
+```{r echo=FALSE}
+r_350_grammar <- cor(u_350_grammar, use = "pairwise.complete.obs")
+head(r_350_grammar)
+
+reigen <- eigen(r_350_grammar)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+
+
+#####################################################
+```{r}
+c_ip_150_grammar <- ip_150_grammar_2$est[,1:2]
+c_ip_250_grammar <- ip_250_grammar_2$est[,1:2]
+c_ip_350_grammar <- ip_350_grammar_2$est[,1:2]
+
+for (i in 1:nrow(c_ip_150_grammar)){
+  rownames(c_ip_150_grammar)[i] <- paste('150',rownames(c_ip_150_grammar)[i])
+}
+for (i in 1:nrow(c_ip_250_grammar)){
+  rownames(c_ip_250_grammar)[i] <- paste('250',rownames(c_ip_250_grammar)[i])
+}
+for (i in 1:nrow(c_ip_350_grammar)){
+  rownames(c_ip_350_grammar)[i] <- paste('350',rownames(c_ip_350_grammar)[i])
+}
+
+
+ip_all_grammar <- rbind(c_ip_150_grammar, c_ip_250_grammar, c_ip_350_grammar)
+```
+
+```{r}
+c_dif_level_150_grammar <- dif_level_150_grammar
+c_dif_level_250_grammar <- dif_level_250_grammar
+c_dif_level_350_grammar <- dif_level_350_grammar
+
+
+for (i in 1:ncol(c_dif_level_150_grammar)){
+  colnames(c_dif_level_150_grammar)[i] <- paste('150',colnames(c_dif_level_150_grammar)[i])
+}
+for (i in 1:ncol(c_dif_level_250_grammar)){
+  colnames(c_dif_level_250_grammar)[i] <- paste('250',colnames(c_dif_level_250_grammar)[i])
+}
+for (i in 1:ncol(c_dif_level_350_grammar)){
+  colnames(c_dif_level_350_grammar)[i] <- paste('350',colnames(c_dif_level_350_grammar)[i])
+}
+
+dif_level_all_grammar <- merge(c_dif_level_150_grammar, c_dif_level_250_grammar, by = NULL)
+dif_level_all_grammar <- merge(dif_level_all_grammar, c_dif_level_350_grammar, by = NULL)
+```
+
+```{r}
+par(mar = c(4, 4, 1, 1))
+plot(ip_all_grammar, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", xlim=range(0, 3), ylim = range(-3,4), cex.lab=0.75, cex.axis=0.75)
+text(ip_all_grammar[,1], ip_all_grammar[,2], paste(rownames(ip_all_grammar)), cex = 0.4, col=t(dif_level_all_grammar)[,1])
+legend("topright", legend = c("dif_level 1", "dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_all_grammar)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_all_grammar[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_all_grammar[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_all_grammar[,1] > low_disc & ip_all_grammar[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_all_grammar[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_all_grammar[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_all_grammar[,2] > low_diff & ip_all_grammar[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+ip_all_grammar_2 <- ip_all_grammar[!(rownames(ip_all_grammar) %in% c("150 33", "150 35", "150 37", "150 39", "250 37", "350 15")), ]
+dif_level_all_grammar_2 <- select(dif_level_all_grammar, -c("150 33", "150 35", "150 37", "150 39", "250 37", "350 15"))
+```
+
+```{r}
+par(mar = c(4, 4, 1, 1))
+plot(ip_all_grammar_2, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", xlim=range(0, 2.5), ylim = range(-3,4), cex.lab=0.75, cex.axis=0.75)
+text(ip_all_grammar_2[,1], ip_all_grammar_2[,2], paste(rownames(ip_all_grammar_2)), cex = 0.4, col=t(dif_level_all_grammar_2)[,1])
+legend("topright", legend = c("dif_level 1", "dif_level 2", "dif_level 3", "dif_level 4"), text.col = unique(t(dif_level_all_grammar_2)[,1]), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+```{r}
+dif_level_1 <- select_if(dif_level_all_grammar, dif_level_all_grammar[1,]=='1')
+dif_level_2 <- select_if(dif_level_all_grammar, dif_level_all_grammar[1,]=='2')
+dif_level_3 <- select_if(dif_level_all_grammar, dif_level_all_grammar[1,]=='3')
+dif_level_4 <- select_if(dif_level_all_grammar, dif_level_all_grammar[1,]=='4')
+```
+
+```{r}
+ip_dif_1 <- ip_all_grammar[rownames(ip_all_grammar) %in% colnames(dif_level_1), ]
+ip_dif_2 <- ip_all_grammar[rownames(ip_all_grammar) %in% colnames(dif_level_2), ]
+ip_dif_3 <- ip_all_grammar[rownames(ip_all_grammar) %in% colnames(dif_level_3), ]
+ip_dif_4 <- ip_all_grammar[rownames(ip_all_grammar) %in% colnames(dif_level_4), ]
+```
+
+
+```{r}
+color <- substring(colnames(dif_level_1), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_1, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75, xlim = c(0,2), ylim = c(-2,1))
+text(ip_dif_1[,1], ip_dif_1[,2], paste(rownames(ip_dif_1)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+```{r}
+color <- substring(colnames(dif_level_2), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_2, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", xlim=range(0, 3), ylim = range(-3,1), cex.lab=0.75, cex.axis=0.75)
+text(ip_dif_2[,1], ip_dif_2[,2], paste(rownames(ip_dif_2)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_dif_2[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_dif_2[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_dif_2[,1] > low_disc & ip_dif_2[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_dif_2[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_dif_2[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_dif_2[,2] > low_diff & ip_dif_2[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+ip_dif_2_2 <- ip_dif_2[!(rownames(ip_dif_2) %in% c("150 33", "350 15")), ]
+dif_level_2_2 <- select(dif_level_2, -c("150 33", "350 15"))
+```
+
+```{r}
+color <- substring(colnames(dif_level_2_2), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_2_2, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75, xlim=range(0, 3), ylim = range(-3,1))
+text(ip_dif_2_2[,1], ip_dif_2_2[,2], paste(rownames(ip_dif_2_2)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+```{r}
+color <- substring(colnames(dif_level_3), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_3, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75)
+text(ip_dif_3[,1], ip_dif_3[,2], paste(rownames(ip_dif_3)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_dif_3[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_dif_3[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_dif_3[,1] > low_disc & ip_dif_3[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_dif_3[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_dif_3[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_dif_3[,2] > low_diff & ip_dif_3[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+ip_dif_3_2 <- ip_dif_3[!(rownames(ip_dif_3) %in% c("150 35", "150 37", "250 37")), ]
+dif_level_3_2 <- select(dif_level_3, -c("150 35", "150 37", "250 37"))
+```
+
+```{r}
+color <- substring(colnames(dif_level_3_2), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_3_2, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75)
+text(ip_dif_3_2[,1], ip_dif_3_2[,2], paste(rownames(ip_dif_3_2)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+```{r}
+color <- substring(colnames(dif_level_4), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_4, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75)
+text(ip_dif_4[,1], ip_dif_4[,2], paste(rownames(ip_dif_4)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_dif_4[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_dif_4[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_dif_4[,1] > low_disc & ip_dif_4[,1] < up_disc)
+
+
+Q_diff <- quantile(ip_dif_4[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_dif_4[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_dif_4[,2] > low_diff & ip_dif_4[,2] < up_diff)
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+ip_dif_4_2 <- ip_dif_4[!(rownames(ip_dif_4) %in% c("350 28", "350 25")), ]
+dif_level_4_2 <- select(dif_level_4, -c("350 28", "350 25"))
+```
+
+```{r}
+color <- substring(colnames(dif_level_4_2), 1,3)
+color <- replace(color, color=='150', 'red')
+color <- replace(color, color=='250', 'blue')
+color <- replace(color, color=='350', 'green')
+
+par(mar = c(4, 4, 1, 1))
+plot(ip_dif_4_2, type = "n", xlab = "Discriminatory power", ylab = "Difficulity", cex.lab=0.75, cex.axis=0.75, xlim = c(0.2, 1))
+text(ip_dif_4_2[,1], ip_dif_4_2[,2], paste(rownames(ip_dif_4_2)), cex = 0.6, col = color)
+legend("topright", legend = c("150", "250", "350"), text.col = c('red', 'blue', 'green'), cex = 0.6)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```

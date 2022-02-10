@@ -1,0 +1,1274 @@
+---
+title: "ES150A-B"
+author: "Shinsuke Adachi"
+date: "6/27/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r include=FALSE}
+library(ltm)
+library(irtoys)
+library(tidyverse)
+library(gt)
+library(kableExtra)
+library(ggplot2)
+library(readxl)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+options(knitr.kable.NA = '')
+```
+
+### ES150 2020 Term A Grammar
+```{r echo=FALSE}
+A2020 <- read.csv("2020-ES150-A.csv",header = TRUE)
+answersA2020 <- subset(A2020, select = c(33:52, 68:82))
+```
+
+## Cleaning
+```{r echo=FALSE}
+for (col in colnames(answersA2020)){
+  answersA2020[[col]][answersA2020[col] =="-"] <- NA
+  answersA2020[[col]][answersA2020[col] > 0] <- 1
+  answersA2020[[col]] <- as.numeric(answersA2020[[col]])
+}
+answersA2020 <- rename_with(answersA2020, ~ stringr::str_remove(., "..1.00"))
+answersA2020 <- rename_with(answersA2020, ~ stringr::str_remove(., "Q.."))
+```
+
+
+
+#### EDA
+
+<details>
+<summary></summary>
+
+#Boxplot
+```{r echo=FALSE}
+A2020$Grade_EA[A2020$Grade_EA == 0] <- NA
+score <- na.omit(A2020$Grade_EA)
+summary(score)
+ggplot(A2020, aes(x = Grade_EA)) + geom_boxplot() + ggtitle("ES150 2020 Term A Grammar")
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(A2020, aes(x = Grade_EA)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2020 Term A Grammar")
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(c(23:42, 58:72))
+
+avgData <- vector('numeric', 35L)
+for (j in 1:35) avgData[j] <- sum(na.omit(answersA2020[,j]))/length(na.omit(answersA2020[,j]))
+
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=10), legend.position = "none", plot.title = element_text(size=10)) + ggtitle("ES150 2020 Term A Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+
+#### 2PLM
+
+```{r echo=FALSE}
+u_A2020 <- na.omit(answersA2020)
+ip_A2020 <- est(resp=u_A2020, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_A2020$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
+
+#### Difficulty / Dscriminatory Power {.tabset .tabset-fade}
+
+##### List
+
+<details>
+<summary></summary>
+```{r}
+ip_A2020$est
+```
+V1: discrimination parameter
+V2: difficulty parameter
+
+</details>
+
+##### Plot
+```{r echo=FALSE}
+par(mar = c(4, 4, 2, 2))
+plot(ip_A2020$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity", main = "ES150 2020 Term A Grammar", cex.lab = 0.75, cex.axis = 0.75, cex.main = 0.75)
+text(ip_A2020$est[,1], ip_A2020$est[,2], paste(rownames(ip_A2020$est)), cex = 0.5)
+abline(v = 1, h = 0, lty = 2, lwd = 0.5)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_A2020$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_A2020$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_A2020$est[,1] > low_disc & ip_A2020$est[,1] < up_disc)
+print(names(which(outlier_disc == FALSE)))
+
+Q_diff <- quantile(ip_A2020$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_A2020$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_A2020$est[,2] > low_diff & ip_A2020$est[,2] < up_diff)
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_A2020_2 <- select(u_A2020, -c('40'))
+```
+
+```{r echo=FALSE}
+ip_A2020_2 <- est(resp=u_A2020_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_A2020_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_A2020_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_A2020_2$est[,1], ip_A2020_2$est[,2], paste(rownames(ip_A2020_2$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_A2020$est)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve", cex.main = 0.75)
+abline(h=0.5)
+```
+
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+#### Local independence {.tabset .tabset-fade}
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_A2020 <- rowSums(u_A2020, na.rm = TRUE)
+comp <- apply(u_A2020, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_A2020[comp,], var, na.rm=TRUE))
+(sy <- var(y_A2020[comp]))
+```
+
+```{r echo=FALSE}
+(37/36)*(1-sum(sj)/sy)
+```
+
+```{r echo=FALSE}
+r_A2020 <- cor(u_A2020, use = "pairwise.complete.obs")
+head(r_A2020)
+
+
+reigen <- eigen(r_A2020)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+
+
+#what does scree plot mean?
+#since 12 of the items have eigenvalues>1, we only need 12 items to verify unidimensionality 
+```
+
+
+
+################################################################
+
+
+### ES150 2020 Term B Grammar
+```{r echo=FALSE}
+B2020 <- read.csv("2020-ES150-B.csv",header = TRUE)
+answersB2020 <- subset(B2020, select = c(11:83))
+```
+
+## Cleaning
+```{r echo=FALSE}
+for (col in colnames(answersB2020)){
+  answersB2020[[col]][answersB2020[col] =="-"] <- NA
+  answersB2020[[col]][answersB2020[col] > 0] <- 1
+  answersB2020[[col]] <- as.numeric(answersB2020[[col]])
+}
+
+answersB2020 <- subset(answersB2020, select = c(1:5, 7:62, 64:73))
+answersB2020 <- rename_with(answersB2020, ~ stringr::str_remove(., "..1.00"))
+answersB2020 <- rename_with(answersB2020, ~ stringr::str_remove(., "Q.."))
+```
+
+#### 
+
+<details>
+<summary></summary>
+
+```{r echo=FALSE}
+summary(answersB2020)
+```
+
+#Boxplot
+```{r echo=FALSE}
+B2020$Grade_EB[B2020$Grade_EB == 0] <- NA
+score <- na.omit(B2020$Grade_EB)
+summary(score)
+ggplot(B2020, aes(x = Grade_EB)) + geom_boxplot() + ggtitle("ES150 2020 Term B Grammar")
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(B2020, aes(x = Grade_EB)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2020 Term B Grammar")
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(colnames(answersB2020))
+
+avgData <- vector('numeric', 69L)
+for (j in 1:69) avgData[j] <- sum(na.omit(answersB2020[,j]))/length(na.omit(answersB2020[,j]))
+
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=8), legend.position = "none", plot.title = element_text(size=8)) + ggtitle("ES150 2020 Term B Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+
+```{r echo=FALSE}
+answersB2020 <- subset(answersB2020, select = -c(17, 42))
+
+```
+
+#### 2PLM
+
+```{r echo=FALSE}
+u_B2020 <- na.omit(answersB2020)
+ip_B2020 <- est(resp=u_B2020, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_B2020$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+
+
+#### Difficulty / Dscriminatory Power {.tabset .tabset-fade}
+
+##### List
+
+<details>
+<summary></summary>
+```{r}
+ip_B2020$est
+```
+
+</details>
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_B2020$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2020$est[,1], ip_B2020$est[,2], paste(rownames(ip_B2020$est)), cex = 0.5)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_B2020$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_B2020$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_B2020$est[,1] > low_disc & ip_B2020$est[,1] < up_disc)
+
+Q_diff <- quantile(ip_B2020$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_B2020$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_B2020$est[,2] > low_diff & ip_B2020$est[,2] < up_diff)
+
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+
+```
+
+```{r echo=FALSE}
+u_B2020_2 <- select(u_B2020, -c("17", "19", '20','21','22','29','39', "41", "42", "59"))
+```
+
+```{r echo=FALSE}
+ip_B2020_2 <- est(resp = u_B2020_2, model = "2PL", engine = "ltm", a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+```
+
+```{r echo=FALSE}
+plot(ip_B2020_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2020_2$est[,1], ip_B2020_2$est[,2], paste(rownames(ip_B2020_2$est)), cex = 0.5)
+abline(v = 1, h = 0, lty = 2, lwd = 0.5)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_B2020_2$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+
+
+```
+
+#### Local independence {.tabset .tabset-fade}
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_B2020 <- rowSums(u_B2020_2, na.rm = TRUE)
+comp <- apply(u_B2020_2, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_B2020_2[comp,], var, na.rm=TRUE))
+(sy <- var(y_B2020[comp]))
+```
+
+```{r echo=FALSE}
+(37/36)*(1-sum(sj)/sy)
+```
+
+```{r echo=FALSE}
+r_B2020 <- cor(u_B2020_2, use = "pairwise.complete.obs")
+head(r_B2020)
+
+reigen <- eigen(r_B2020)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+
+```
+
+
+################################################################
+
+
+### ES150 2019 Term A Grammar
+```{r}
+A2019 <- read_excel("2019-ES150-A.xlsx")
+key_A2019 <- A2019[1,4:42]
+answersA2019 <- A2019[3:363, 4:42]
+```
+
+```{r}
+answersA2019 <- rename_with(answersA2019, ~ stringr::str_remove(., "設問"))
+```
+
+```{r}
+key_A2019 <- as.numeric(key_A2019)
+answersA2019[answersA2019=='NA'] <- NA
+for(j in 1:39) answersA2019[,j] <- as.numeric(unlist(answersA2019[,j]))
+```
+
+#### 記述統計 ES150
+
+<details>
+<summary></summary>
+
+```{r echo=FALSE}
+summary(answersA2019)
+```
+
+#Convert score into 100 scale
+```{r echo=FALSE}
+A2019_perfect <- sum(A2019[2,4:42])
+  
+A2019$得点[A2019$得点 == "-"] <- NA
+A2019$得点 <- as.numeric(A2019$得点)
+A2019$Grade_EA <- A2019$得点*100/A2019_perfect
+```
+
+#Boxplot
+```{r echo=FALSE}
+A2019$Grade_EA[A2019$Grade_EA == "-"] <- NA
+score <- na.omit(A2019$Grade_EA)
+A2019$得点 <- as.numeric(A2019$Grade_EA)
+score <- as.numeric(score)
+summary(score)
+ggplot(A2019, aes(x = Grade_EA)) + geom_boxplot() + ggtitle("ES150 2019 Term A Grammar") + xlab('score')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(A2019, aes(x = Grade_EA)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2019 Term A Grammar") + xlab('score')
+```
+
+
+```{r}
+u_A2019 <- answersA2019
+for(j in 1:361) u_A2019[j,] <- (key_A2019==answersA2019[j,])*1
+```
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(colnames(u_A2019))
+
+avgData <- vector('numeric', 39L)
+for (j in 1:39) avgData[j] <- sum(na.omit(u_A2019[,j]))/nrow(na.omit(u_A2019[,j]))
+
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=8), legend.position = "none", plot.title = element_text(size=8)) + ggtitle("ES150 2019 Term A Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+
+```{r echo=FALSE}
+#u_A2019 <- na.omit(answersA2019)
+ip_A2019 <- est(resp=u_A2019, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_A2019$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_A2019$est
+```
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_A2019$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_A2019$est[,1], ip_A2019$est[,2], paste(rownames(ip_A2019$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_A2019$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_A2019$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_A2019$est[,1] > low_disc & ip_A2019$est[,1] < up_disc)
+
+Q_diff <- quantile(ip_A2019$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_A2019$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_A2019$est[,2] > low_diff & ip_A2019$est[,2] < up_diff)
+
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_A2019$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v=0, h=0.5, lwd=0.5)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = 2 - data for students of ability = 2
+
+# Selecting questions that 60% of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.6]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions 2')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.6, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_A2019 <- rowSums(u_A2019, na.rm = TRUE)
+comp <- apply(u_A2019, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_A2019[comp,], var, na.rm=TRUE))
+(sy <- var(y_A2019[comp]))
+```
+
+```{r echo=FALSE}
+r_A2019 <- cor(u_A2019, use = "pairwise.complete.obs")
+head(r_A2019)
+
+reigen <- eigen(r_A2019)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+################################################################
+
+### ES150 2019 Term B Grammar
+```{r}
+B2019 <- read.csv("2019-ES150-B.csv",header = TRUE, fileEncoding = "cp932")
+key_B2019 <- B2019[1,4:78]
+answersB2019 <- B2019[3:364, 4:78]
+```
+
+```{r}
+answersB2019 <- rename_with(answersB2019, ~ stringr::str_remove(., "設問"))
+```
+
+```{r}
+key_B2019 <- as.numeric(key_B2019)
+answersB2019[answersB2019=='NA'] <- NA
+for(j in 1:75) answersB2019[,j] <- as.numeric(unlist(answersB2019[,j]))
+```
+
+```{r}
+u_B2019 <- answersB2019
+for(j in 1:362) u_B2019[j,] <- (key_B2019==answersB2019[j,])*1
+```
+
+#### 記述統計 ES150
+
+<details>
+<summary></summary>
+
+```{r echo=FALSE}
+summary(u_B2019)
+```
+
+# calculate total score
+```{r echo=FALSE}
+total <- vector()
+for(j in 1:362) total[j] <- sum(u_B2019[j,], na.rm=TRUE)
+B2019$得点 <- c(c(NA, NA), total)
+```
+
+#Convert score into 100 scale
+```{r echo=FALSE}
+B2019_perfect <- length(B2019[2,4:78])
+  
+B2019$得点[B2019$得点 == "-"] <- NA
+B2019$得点 <- as.numeric(B2019$得点)
+B2019$Grade_EB <- B2019$得点*100/B2019_perfect
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+B2019$Grade_EB[B2019$Grade_EB == "-"] <- NA
+score <- na.omit(B2019$Grade_EB)
+B2019$Grade_EB <- as.numeric(B2019$Grade_EB)
+score <- as.numeric(score)
+summary(score)
+ggplot(B2019, aes(x = Grade_EB)) + geom_boxplot() + ggtitle("ES150 2019 Term B Grammar") + xlab('score')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(B2019, aes(x = Grade_EB)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2019 Term B Grammar") + xlab('score')
+```
+
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(colnames(u_B2019))
+
+avgData <- vector('numeric', 75L)
+for (j in 1:75) avgData[j] <- sum(u_B2019[,j], na.rm=TRUE)/length(na.omit(u_B2019[,j]))
+
+questionNumber <- factor(questionNumber, levels = sort(as.numeric(questionNumber)))
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=8), legend.position = "none", plot.title = element_text(size=8)) + ggtitle("ES150 2019 Term B Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+
+```{r echo=FALSE}
+#u_A2018 <- na.omit(answersA2019)
+ip_B2019 <- est(resp=u_B2019, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_B2019$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_B2019$est
+```
+
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_B2019$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2019$est[,1], ip_B2019$est[,2], paste(rownames(ip_B2019$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+##### Remove outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_B2019$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_B2019$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_B2019$est[,1] > low_disc & ip_B2019$est[,1] < up_disc)
+
+Q_diff <- quantile(ip_B2019$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_B2019$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_B2019$est[,2] > low_diff & ip_B2019$est[,2] < up_diff)
+
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_B2019_2 <- select(u_B2019, -c('4','6','7','18',"19", "20", "22",'44'))
+```
+
+```{r echo=FALSE}
+#u_A2018 <- na.omit(answersA2019)
+ip_B2019_2 <- est(resp=u_B2019_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_B2019_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_B2019_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2019_2$est[,1], ip_B2019_2$est[,2], paste(rownames(ip_B2019_2$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_B2019$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v = 0, h = 0.5, lwd = 0.5, lty=1)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[13, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-3, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = 2 - data for students of ability = 2
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions 2')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.5, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_B2019 <- rowSums(u_B2019, na.rm = TRUE)
+comp <- apply(u_B2019, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_B2019[comp,], var, na.rm=TRUE))
+(sy <- var(y_B2019[comp]))
+```
+
+```{r echo=FALSE}
+r_B2019 <- cor(u_B2019, use = "pairwise.complete.obs")
+head(r_B2019)
+
+reigen <- eigen(r_B2018)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+
+################################################################
+
+### ES150 2018 Term A Grammar
+```{r}
+A2018 <- read_excel("2018-ES150-A.xlsx")
+key_A2018 <- A2018[1,4:41]
+answersA2018 <- A2018[3:382, 4:41]
+```
+
+```{r}
+answersA2018 <- rename_with(answersA2018, ~ stringr::str_remove(., "設問"))
+```
+
+```{r}
+key_A2018 <- as.numeric(key_A2018)
+answersA2018[answersA2018=='NA'] <- NA
+for(j in 1:38) answersA2018[,j] <- as.numeric(unlist(answersA2018[,j]))
+```
+
+```{r}
+u_A2018 <- answersA2018
+for(j in 1:380) u_A2018[j,] <- (key_A2018==answersA2018[j,])*1
+```
+
+#### 記述統計 ES150
+
+<details>
+<summary></summary>
+
+```{r echo=FALSE}
+summary(u_A2018)
+```
+# calculate total score
+```{r echo=FALSE}
+total <- vector()
+for(j in 1:380) total[j] <- sum(u_A2018[j,], na.rm=TRUE)
+A2018$得点 <- c(c(NA, NA), total)
+```
+
+#Convert score into 100 scale
+```{r echo=FALSE}
+A2018_perfect <- length(A2018[2,4:41])
+  
+A2018$得点[A2018$得点 == "-"] <- NA
+A2018$得点 <- as.numeric(A2018$得点)
+A2018$Grade_EA <- A2018$得点*100/A2018_perfect
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+A2018$Grade_EA[A2018$Grade_EA == "-"] <- NA
+score <- na.omit(A2018$Grade_EA)
+A2018$Grade_EA <- as.numeric(A2018$Grade_EA)
+score <- as.numeric(score)
+summary(score)
+ggplot(A2018, aes(x = Grade_EA)) + geom_boxplot() + ggtitle("ES150 2018 Term A Grammar") + xlab('score')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(A2018, aes(x = Grade_EA)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2018 Term A Grammar") + xlab('score')
+```
+
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(colnames(u_A2018))
+
+avgData <- vector('numeric', 38L)
+for (j in 1:38) avgData[j] <- sum(na.omit(u_A2018[,j]))/nrow(na.omit(u_A2018[,j]))
+
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=8), legend.position = "none", plot.title = element_text(size=8)) + ggtitle("ES150 2018 Term A Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+
+```{r echo=FALSE}
+#u_A2018 <- na.omit(answersA2019)
+ip_A2018 <- est(resp=u_A2018, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_A2018$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_A2018$est
+```
+
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_A2018$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_A2018$est[,1], ip_A2018$est[,2], paste(rownames(ip_A2018$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_A2018$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_A2018$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_A2018$est[,1] > low_disc & ip_A2018$est[,1] < up_disc)
+
+Q_diff <- quantile(ip_A2018$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_A2018$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_A2018$est[,2] > low_diff & ip_A2018$est[,2] < up_diff)
+
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_A2018$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v = 0, h = 0.5, lwd = 0.5, lty=1)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[26, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_A2018 <- rowSums(u_A2018, na.rm = TRUE)
+comp <- apply(u_A2018, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_A2018[comp,], var, na.rm=TRUE))
+(sy <- var(y_A2018[comp]))
+```
+
+```{r echo=FALSE}
+r_A2018 <- cor(u_A2018, use = "pairwise.complete.obs")
+head(r_A2018)
+
+reigen <- eigen(r_A2018)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+
+##################################################
+
+
+### ES150 2018 Term B Grammar
+```{r}
+B2018 <- read_excel("2018-ES150-B.xlsx")
+key_B2018 <- B2018[1,4:82]
+answersB2018 <- B2018[3:362, 4:82]
+```
+
+```{r}
+answersB2018 <- rename_with(answersB2018, ~ stringr::str_remove(., "設問"))
+```
+
+```{r}
+key_B2018 <- as.numeric(key_B2018)
+answersB2018[answersB2018=='NA'] <- NA
+for(j in 1:79) answersB2018[,j] <- as.numeric(unlist(answersB2018[,j]))
+```
+
+```{r}
+u_B2018 <- answersB2018
+for(j in 1:360) u_B2018[j,] <- (key_B2018==answersB2018[j,])*1
+```
+
+#### 記述統計 ES150
+
+<details>
+<summary></summary>
+
+```{r echo=FALSE}
+summary(u_B2018)
+```
+
+#Convert score into 100 scale
+```{r echo=FALSE}
+B2018_perfect <- sum(B2018[2,4:82])
+  
+B2018$得点[B2018$得点 == "-"] <- NA
+B2018$得点 <- as.numeric(B2018$得点)
+B2018$Grade_EB <- B2018$得点*100/B2018_perfect
+```
+
+
+#Boxplot
+```{r echo=FALSE}
+B2018$Grade_EB[B2018$Grade_EB == "-"] <- NA
+score <- na.omit(B2018$Grade_EB)
+B2018$Grade_EB <- as.numeric(B2018$Grade_EB)
+score <- as.numeric(score)
+summary(score)
+ggplot(B2018, aes(x = Grade_EB)) + geom_boxplot() + ggtitle("ES150 2018 Term B Grammar") + xlab('score')
+```
+
+#Score distribution
+```{r echo=FALSE}
+
+ggplot(B2018, aes(x = Grade_EB)) + geom_histogram(binwidth = 5, colour="black", fill="white") + geom_density()+ ggtitle("ES150 2018 Term B Grammar") + xlab('score')
+```
+
+
+# Propotion of correct answers per question
+```{r echo=FALSE}
+questionNumber <- as.character(colnames(u_B2018))
+
+
+avgData <- vector('numeric', 79L)
+for (j in 1:79) avgData[j] <- sum(na.omit(u_B2018[,j]))/nrow(na.omit(u_B2018[,j]))
+
+questionNumber <- factor(questionNumber, levels = sort(as.numeric(questionNumber)))
+testData <- data.frame(questionNumber, avgData)
+
+summary(testData$avgData*100)
+
+ggplot(testData, aes(x = questionNumber, y = avgData, fill = avgData)) + geom_bar(stat = 'identity') + xlab("Question Number") + ylab("Propotion of correct answers") + theme(axis.text=element_text(size=6), axis.title=element_text(size=8), legend.position = "none", plot.title = element_text(size=8)) + ggtitle("ES150 2018 Term B Grammar")
+```
+
+```{r echo=FALSE}
+summary(avgData)
+```
+
+</details>
+
+```{r echo=FALSE}
+#u_B2018 <- na.omit(answersB2018)
+ip_B2018 <- est(resp=u_B2018, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_B2018$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r}
+ip_B2018$est
+```
+
+
+##### Plot
+```{r echo=FALSE}
+plot(ip_B2018$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2018$est[,1], ip_B2018$est[,2], paste(rownames(ip_B2018$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+```
+
+## Removing outliers
+## Removing outliers
+```{r echo=FALSE}
+Q_disc <- quantile(ip_B2018$est[,1], probs=c(.25, .75), na.rm = FALSE)
+iqr_disc <- IQR(ip_B2018$est[,1])
+up_disc <-  Q_disc[2]+1.5*iqr_disc  
+low_disc <- Q_disc[1]-1.5*iqr_disc
+outlier_disc <- (ip_B2018$est[,1] > low_disc & ip_B2018$est[,1] < up_disc)
+
+Q_diff <- quantile(ip_B2018$est[,2], probs=c(.25, .75), na.rm = FALSE)
+iqr_diff <- IQR(ip_B2018$est[,2])
+up_diff <-  Q_diff[2]+1.5*iqr_diff 
+low_diff <- Q_diff[1]-1.5*iqr_diff
+outlier_diff <- (ip_B2018$est[,2] > low_diff & ip_B2018$est[,2] < up_diff)
+
+print(names(which(outlier_disc == FALSE)))
+print(names(which(outlier_diff == FALSE)))
+```
+
+```{r echo=FALSE}
+u_B2018_2 <- select(u_B2018, -c("15", '27','29','44','66','76'))
+```
+
+```{r echo=FALSE}
+ip_B2018_2 <- est(resp=u_B2018_2, model = "2PL", engine = "ltm",a.prior = FALSE, b.prior = FALSE, c.prior = FALSE, run.name = "L2_2PL")
+
+kable(summary(ip_B2018_2$est)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r echo=FALSE}
+plot(ip_B2018_2$est[,1:2], type = "n", xlab = "Discriminatory power", ylab = "Difficulity")
+text(ip_B2018_2$est[,1], ip_B2018_2$est[,2], paste(rownames(ip_B2018_2$est)), cex = 0.5)
+abline(v = 1, h = 0, lwd = 0.5, lty=2)
+
+mean(ip_B2018_2$est[,1])
+mean(ip_B2018_2$est[,2])
+```
+
+
+### Item Characteristic Curve
+```{r echo=FALSE}
+values.icc <- irf(ip_B2018$est)
+ls(values.icc)
+plot(values.icc, label=TRUE,co=NA, main = "Item Characteristic Curve")
+abline(v = 0, h = 0.5, lwd = 0.5, lty=1)
+```
+
+# ICC for selected items
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[26] = -2 - data for students of ability = -2
+#values.icc$x[13] = -3.04 - data for students of ability = -3.04
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected <- values.icc$f[, values.icc$f[13, ] > 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions')
+
+counter <- 0
+for (j in colnames(values.icc_selected)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected[,j], col = rainbow(ncol(values.icc_selected))[counter])
+  
+}
+text(-4, values.icc_selected[1,], paste(colnames(values.icc_selected)), cex = 0.5)
+abline(h = 0.5, v=-3, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected))
+```
+
+# ICC for selected items 2
+```{r echo=FALSE}
+
+#Set the threshold
+#values.icc$x[76] = 2 - data for students of ability = 2
+
+
+# Selecting questions that half of the students of given ability get correct
+values.icc_selected_2 <- values.icc$f[, values.icc$f[76, ] < 0.5]
+plot(values.icc$x, type="n", ylab = "Probability of a correct response", xlab = "Ability", xlim = c(-4,4), ylim = c(0.0, 1.0), main = 'ICC for selected questions 2')
+
+counter <- 0
+for (j in colnames(values.icc_selected_2)){
+  counter <- counter + 1
+  lines(values.icc$x,values.icc_selected_2[,j], col = rainbow(ncol(values.icc_selected_2))[counter])
+  
+}
+text(-4, values.icc_selected_2[1,], paste(colnames(values.icc_selected_2)), cex = 0.5)
+abline(h = 0.5, v=2, lty=2, lwd=0.5)
+
+# These are not good questions since students with low ability can still get them correct
+print(colnames(values.icc_selected_2))
+```
+
+##### Correlation coefficient
+
+<details>
+<summary></summary>
+```{r echo=FALSE}
+y_B2018 <- rowSums(u_B2018, na.rm = TRUE)
+comp <- apply(u_B2018, 1, function(x) all(!is.na(x)))
+(sj <- sapply(u_B2018[comp,], var, na.rm=TRUE))
+(sy <- var(y_B2018[comp]))
+```
+
+```{r echo=FALSE}
+r_B2018 <- cor(u_B2018, use = "pairwise.complete.obs")
+head(r_B2018)
+
+reigen <- eigen(r_B2018)
+reigen$values
+```
+
+</details>
+
+
+##### Scree Plot
+```{r}
+plot(reigen$values, type = "o", ylab = "Eigenvalues", main = "Scree Plot", cex=0.5)
+abline(h=1)
+```
+
+#####################################################################
+
+# Compare each year
+```{r}
+A2020_box <- ggplot(A2020, aes(y = Grade_EA)) + geom_boxplot() + theme(axis.title.y = element_blank()) + ylim(0, 100)
+A2019_box <- ggplot(A2019, aes(y = Grade_EA)) + geom_boxplot() + theme(axis.title.y = element_blank()) + ylim(0, 100)
+A2018_box <- ggplot(A2018, aes(y = Grade_EA)) + geom_boxplot()+ theme(axis.title.y = element_blank()) + ylim(0, 100)
+ggarrange(A2018_box, A2019_box, A2020_box, labels = c("2018", "2019", "2020"), nrow = 1, ncol = 3, font.label = list(size = 12, color = "black", face = 'plain'), hjust = -1.5)
+```
+
+```{r}
+B2020_box <- ggplot(B2020, aes(y = Grade_EB)) + geom_boxplot() + theme(axis.title.y = element_blank()) + ylim(0, 100)
+B2019_box <- ggplot(B2019, aes(y = Grade_EB)) + geom_boxplot() + theme(axis.title.y = element_blank()) + ylim(0, 100)
+B2018_box <- ggplot(B2018, aes(y = Grade_EB)) + geom_boxplot()+ theme(axis.title.y = element_blank()) + ylim(0, 100)
+ggarrange(B2018_box, B2019_box, B2020_box, labels = c("2018", "2019", "2020"), nrow = 1, ncol = 3, font.label = list(size = 12, color = "black", face = 'plain'), hjust = -1.5)
+```
